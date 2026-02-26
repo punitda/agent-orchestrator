@@ -1,6 +1,7 @@
 import express from "express";
 import { loadServerConfig } from "./config.js";
 import { auditLog } from "./middleware/audit.js";
+import { rateLimiter } from "./middleware/rate-limit.js";
 import { getServices } from "./services.js";
 
 const config = loadServerConfig();
@@ -11,6 +12,9 @@ app.use(express.json());
 
 // Audit logging — MUST be before auth middleware so failed auth is captured
 app.use(auditLog);
+
+// Rate limiting — after audit log (so 429s are logged), before auth (to be added)
+app.use(rateLimiter);
 
 async function start(): Promise<void> {
   const services = await getServices();
