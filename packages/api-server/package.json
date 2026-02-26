@@ -32,7 +32,8 @@
   },
   "dependencies": {
     "@composio/ao-core": "workspace:*",
-    "express": "^5.1.0"
+    "express": "^5.1.0",
+    "zod": "^3.24.0"
   },
   "devDependencies": {
     "@types/express": "^5.0.0",
