@@ -1,5 +1,6 @@
 import express from "express";
 import { loadServerConfig } from "./config.js";
+import { auditLog } from "./middleware/audit.js";
 import { getServices } from "./services.js";
 
 const config = loadServerConfig();
@@ -7,6 +8,9 @@ const config = loadServerConfig();
 const app = express();
 
 app.use(express.json());
+
+// Audit logging — MUST be before auth middleware so failed auth is captured
+app.use(auditLog);
 
 async function start(): Promise<void> {
   const services = await getServices();
