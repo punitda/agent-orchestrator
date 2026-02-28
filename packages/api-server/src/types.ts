@@ -6,7 +6,12 @@
  * serializable, client-safe representations.
  */
 
-import type { ActivityState, SessionStatus } from "@composio/ao-core";
+import type {
+  ActivityState,
+  CIStatus,
+  ReviewDecision,
+  SessionStatus,
+} from "@composio/ao-core";
 
 /** Basic PR info included in session list responses (no CI/review enrichment). */
 export interface SessionPR {
@@ -20,7 +25,7 @@ export interface SessionAgentInfo {
   summary: string;
 }
 
-/** A single session as returned by the API. */
+/** A single session as returned by the list API. */
 export interface SessionResponse {
   id: string;
   projectId: string;
@@ -32,4 +37,31 @@ export interface SessionResponse {
   lastActivityAt: string;
   pr: SessionPR | null;
   agentInfo: SessionAgentInfo | null;
+}
+
+// ---------------------------------------------------------------------------
+// Session detail types (GET /api/v1/sessions/:id)
+// ---------------------------------------------------------------------------
+
+/** Enriched PR info with CI, review, and merge data. */
+export interface PRDetailResponse extends SessionPR {
+  ciStatus: CIStatus;
+  reviewDecision: ReviewDecision;
+  mergeable: boolean;
+}
+
+/** Cost estimate from the agent plugin. */
+export interface CostResponse {
+  inputTokens: number;
+  outputTokens: number;
+  estimatedCostUsd: number;
+}
+
+/** Session detail response with enriched PR and cost data. */
+export interface SessionDetailResponse extends Omit<SessionResponse, "pr" | "agentInfo"> {
+  pr: PRDetailResponse | null;
+  agentInfo: {
+    summary: string | null;
+    cost: CostResponse | null;
+  };
 }
