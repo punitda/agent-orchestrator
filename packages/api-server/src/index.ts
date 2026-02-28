@@ -1,5 +1,6 @@
 import express from "express";
 import { loadServerConfig } from "./config.js";
+import { createAuthMiddleware, loadKeyHash } from "./middleware/auth.js";
 import { auditLog } from "./middleware/audit.js";
 import { rateLimiter } from "./middleware/rate-limit.js";
 import { getServices } from "./services.js";
@@ -13,8 +14,17 @@ app.use(express.json());
 // Audit logging — MUST be before auth middleware so failed auth is captured
 app.use(auditLog);
 
-// Rate limiting — after audit log (so 429s are logged), before auth (to be added)
+// Rate limiting — after audit log (so 429s are logged), before auth
 app.use(rateLimiter);
+
+// Auth — load key hash once at startup, cache in closure
+const keyHash = loadKeyHash();
+if (keyHash === null) {
+  console.warn(
+    "Warning: auth.json not found or malformed. Run `generate-key` to create an API key.",
+  );
+}
+app.use(createAuthMiddleware(keyHash));
 
 async function start(): Promise<void> {
   const services = await getServices();
