@@ -3,6 +3,7 @@ import { loadServerConfig } from "./config.js";
 import { createAuthMiddleware, loadKeyHash } from "./middleware/auth.js";
 import { auditLog } from "./middleware/audit.js";
 import { rateLimiter } from "./middleware/rate-limit.js";
+import { healthRouter } from "./routes/health.js";
 import { getServices } from "./services.js";
 
 const config = loadServerConfig();
@@ -16,6 +17,9 @@ app.use(auditLog);
 
 // Rate limiting — after audit log (so 429s are logged), before auth
 app.use(rateLimiter);
+
+// Health check — before auth so it's accessible without API key
+app.use(healthRouter);
 
 // Auth — load key hash once at startup, cache in closure
 const keyHash = loadKeyHash();
