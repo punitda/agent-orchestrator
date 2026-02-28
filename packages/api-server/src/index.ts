@@ -4,6 +4,7 @@ import { createAuthMiddleware, loadKeyHash } from "./middleware/auth.js";
 import { auditLog } from "./middleware/audit.js";
 import { rateLimiter } from "./middleware/rate-limit.js";
 import { healthRouter } from "./routes/health.js";
+import { sessionsRouter } from "./routes/sessions.js";
 import { getServices } from "./services.js";
 
 const config = loadServerConfig();
@@ -29,6 +30,9 @@ if (keyHash === null) {
   );
 }
 app.use(createAuthMiddleware(keyHash));
+
+// Authenticated routes — all routes below require a valid API key
+app.use(sessionsRouter);
 
 async function start(): Promise<void> {
   const services = await getServices();
