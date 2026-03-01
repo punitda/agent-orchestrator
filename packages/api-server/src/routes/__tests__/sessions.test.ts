@@ -91,9 +91,7 @@ function makeSession(overrides: Partial<Session> & { id: string }): Session {
   };
 }
 
-function makeConfig(
-  overrides?: Partial<OrchestratorConfig>,
-): OrchestratorConfig {
+function makeConfig(overrides?: Partial<OrchestratorConfig>): OrchestratorConfig {
   return {
     configPath: "/tmp/config.yaml",
     readyThresholdMs: 300_000,
@@ -919,7 +917,7 @@ describe("GET /api/v1/sessions/:id", () => {
       // SCM returns merged for first session, closed for second
       const reconSCM: Partial<SCM> = {
         name: "github",
-        getPRState: vi.fn(async (pr: PRInfo) => {
+        getPRState: vi.fn(async (_pr: PRInfo) => {
           // Use a side-channel: we know merged-pr is fetched first
           // Actually, use the session manager mock order — need a better approach
           return "merged" as PRState;
