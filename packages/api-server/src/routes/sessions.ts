@@ -11,6 +11,7 @@ import type {
 
 import type { Services } from "../services.js";
 import type {
+  AttentionLevel,
   SessionPR,
   SessionResponse,
   SessionDetailResponse,
@@ -61,24 +62,95 @@ function reconcileSessionStatus(
 }
 
 // ---------------------------------------------------------------------------
+// Helpers — attention level
+// ---------------------------------------------------------------------------
+
+/**
+ * Derive which attention zone a session belongs to.
+ *
+ * This is a simplified version of the dashboard's getAttentionLevel().
+ * The list endpoint has no enriched PR data, so it relies on session
+ * status and activity only. The detail endpoint calls this first, then
+ * upgrades with enriched PR data if available.
+ */
+function getAttentionLevel(
+  status: SessionStatus,
+  activity: string | null,
+  pr?: { state: SessionPR["state"]; ciStatus?: string; reviewDecision?: string; mergeable?: boolean } | null,
+): AttentionLevel {
+  // Done: terminal states
+  if (
+    status === "merged" ||
+    status === "killed" ||
+    status === "cleanup" ||
+    status === "done" ||
+    status === "terminated"
+  ) {
+    return "done";
+  }
+  if (pr?.state === "merged" || pr?.state === "closed") {
+    return "done";
+  }
+
+  // Merge: PR approved + CI green
+  if (status === "mergeable" || status === "approved") {
+    return "merge";
+  }
+  if (pr?.mergeable) {
+    return "merge";
+  }
+
+  // Respond: agent waiting for human input or crashed
+  if (activity === "waiting_input" || activity === "blocked") {
+    return "respond";
+  }
+  if (status === "needs_input" || status === "stuck" || status === "errored") {
+    return "respond";
+  }
+  if (activity === "exited") {
+    return "respond";
+  }
+
+  // Review: CI failed, changes requested
+  if (status === "ci_failed" || status === "changes_requested") {
+    return "review";
+  }
+  if (pr?.ciStatus === "failing") return "review";
+  if (pr?.reviewDecision === "changes_requested") return "review";
+
+  // Pending: waiting on external
+  if (status === "review_pending") {
+    return "pending";
+  }
+  if (pr && (pr.reviewDecision === "pending" || pr.reviewDecision === "none")) {
+    return "pending";
+  }
+
+  // Working: default
+  return "working";
+}
+
+// ---------------------------------------------------------------------------
 // Helpers — list endpoint
 // ---------------------------------------------------------------------------
 
 function toSessionResponse(session: Session): SessionResponse {
   const prState = session.pr ? derivePRState(session.status) : undefined;
   const status = reconcileSessionStatus(session.status, prState, session.activity);
+  const pr = session.pr
+    ? { number: session.pr.number, url: session.pr.url, state: prState ?? "open" }
+    : null;
   return {
     id: session.id,
     projectId: session.projectId,
     status,
+    attentionLevel: getAttentionLevel(status, session.activity, pr),
     activity: session.activity,
     branch: session.branch,
     issueId: session.issueId,
     createdAt: session.createdAt.toISOString(),
     lastActivityAt: session.lastActivityAt.toISOString(),
-    pr: session.pr
-      ? { number: session.pr.number, url: session.pr.url, state: prState ?? "open" }
-      : null,
+    pr,
     agentInfo: session.agentInfo?.summary
       ? { summary: session.agentInfo.summary }
       : null,
@@ -108,25 +180,27 @@ function resolveProject(
 
 /** Build a detail session response (no enrichment yet). */
 function toSessionDetailResponse(session: Session): SessionDetailResponse {
+  const pr = session.pr
+    ? {
+        number: session.pr.number,
+        url: session.pr.url,
+        state: derivePRState(session.status),
+        ciStatus: "none" as const,
+        reviewDecision: "none" as const,
+        mergeable: false,
+      }
+    : null;
   return {
     id: session.id,
     projectId: session.projectId,
     status: session.status,
+    attentionLevel: getAttentionLevel(session.status, session.activity, pr),
     activity: session.activity,
     branch: session.branch,
     issueId: session.issueId,
     createdAt: session.createdAt.toISOString(),
     lastActivityAt: session.lastActivityAt.toISOString(),
-    pr: session.pr
-      ? {
-          number: session.pr.number,
-          url: session.pr.url,
-          state: derivePRState(session.status),
-          ciStatus: "none",
-          reviewDecision: "none",
-          mergeable: false,
-        }
-      : null,
+    pr,
     agentInfo: {
       summary: session.agentInfo?.summary ?? session.metadata["summary"] ?? null,
       cost: null,
@@ -312,6 +386,13 @@ router.get("/api/v1/sessions/:id", async (req, res) => {
       response.status,
       response.pr?.state,
       response.activity,
+    );
+
+    // Recompute attention level with enriched PR data
+    response.attentionLevel = getAttentionLevel(
+      response.status,
+      response.activity,
+      response.pr,
     );
 
     res.json({ session: response });

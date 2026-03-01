@@ -8,6 +8,7 @@ import type {
   SCM,
   Agent,
   PRInfo,
+  PRState,
   CIStatus,
   ReviewDecision,
   MergeReadiness,
@@ -304,6 +305,7 @@ describe("GET /api/v1/sessions", () => {
       expect(session).toHaveProperty("id");
       expect(session).toHaveProperty("projectId");
       expect(session).toHaveProperty("status");
+      expect(session).toHaveProperty("attentionLevel");
       expect(session).toHaveProperty("activity");
       expect(session).toHaveProperty("branch");
       expect(session).toHaveProperty("issueId");
@@ -512,6 +514,7 @@ describe("GET /api/v1/sessions/:id", () => {
 
     const mockSCM: Partial<SCM> = {
       name: "github",
+      getPRState: vi.fn(async () => "open" as PRState),
       getCISummary: vi.fn(async () => "passing" as CIStatus),
       getReviewDecision: vi.fn(async () => "approved" as ReviewDecision),
       getMergeability: vi.fn(
@@ -628,6 +631,9 @@ describe("GET /api/v1/sessions/:id", () => {
       // SCM that takes longer than 3 seconds
       const slowSCM: Partial<SCM> = {
         name: "github",
+        getPRState: vi.fn(
+          () => new Promise<PRState>((resolve) => setTimeout(() => resolve("open"), 5_000)),
+        ),
         getCISummary: vi.fn(
           () => new Promise<CIStatus>((resolve) => setTimeout(() => resolve("passing"), 5_000)),
         ),
@@ -741,6 +747,9 @@ describe("GET /api/v1/sessions/:id", () => {
       // SCM that throws errors
       const failingSCM: Partial<SCM> = {
         name: "github",
+        getPRState: vi.fn(async () => {
+          throw new Error("GitHub API rate limited");
+        }),
         getCISummary: vi.fn(async () => {
           throw new Error("GitHub API rate limited");
         }),
@@ -863,6 +872,248 @@ describe("GET /api/v1/sessions/:id", () => {
       const res = await fetch(`http://127.0.0.1:${port}/api/v1/sessions/meta-session`);
       const body = (await res.json()) as { session: SessionDetailResponse };
       expect(body.session.agentInfo.summary).toBe("From metadata");
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Status reconciliation
+  // -------------------------------------------------------------------------
+
+  describe("status reconciliation", () => {
+    let server: Server;
+    let port: number;
+
+    const mergedPRSession = makeSession({
+      id: "merged-pr",
+      status: "pr_open",
+      activity: "exited",
+      pr: TEST_PR,
+    });
+
+    const closedPRSession = makeSession({
+      id: "closed-pr",
+      status: "pr_open",
+      activity: "exited",
+      pr: TEST_PR,
+    });
+
+    const exitedNoPRSession = makeSession({
+      id: "exited-no-pr",
+      status: "working",
+      activity: "exited",
+    });
+
+    const activeWorkingSession = makeSession({
+      id: "still-working",
+      status: "working",
+      activity: "active",
+    });
+
+    beforeAll(async () => {
+      const sessions = [mergedPRSession, closedPRSession, exitedNoPRSession, activeWorkingSession];
+
+      const mockSessionManager: Partial<SessionManager> = {
+        get: vi.fn(async (id: string) => sessions.find((s) => s.id === id) ?? null),
+      };
+
+      // SCM returns merged for first session, closed for second
+      const reconSCM: Partial<SCM> = {
+        name: "github",
+        getPRState: vi.fn(async (pr: PRInfo) => {
+          // Use a side-channel: we know merged-pr is fetched first
+          // Actually, use the session manager mock order — need a better approach
+          return "merged" as PRState;
+        }),
+        getCISummary: vi.fn(async () => "none" as CIStatus),
+        getReviewDecision: vi.fn(async () => "none" as ReviewDecision),
+        getMergeability: vi.fn(
+          async () =>
+            ({
+              mergeable: false,
+              ciPassing: false,
+              approved: false,
+              noConflicts: true,
+              blockers: [],
+            }) satisfies MergeReadiness,
+        ),
+      };
+
+      const mockRegistry = {
+        get: vi.fn((slot: string) => {
+          if (slot === "scm") return reconSCM;
+          return null;
+        }),
+        list: vi.fn(() => []),
+      } as unknown as PluginRegistry;
+
+      const services: Services = {
+        config: makeConfig(),
+        registry: mockRegistry,
+        sessionManager: mockSessionManager as SessionManager,
+      };
+
+      const app = express();
+      app.locals["services"] = services;
+      app.use(sessionsRouter);
+
+      const result = await startApp(app);
+      server = result.server;
+      port = result.port;
+    });
+
+    afterAll(async () => {
+      await stopServer(server);
+    });
+
+    it("reconciles pr_open to merged when PR is merged", async () => {
+      const res = await fetch(`http://127.0.0.1:${port}/api/v1/sessions/merged-pr`);
+      const body = (await res.json()) as { session: SessionDetailResponse };
+      expect(body.session.status).toBe("merged");
+      expect(body.session.pr!.state).toBe("merged");
+    });
+
+    it("reconciles working + exited (no PR) to done", async () => {
+      const res = await fetch(`http://127.0.0.1:${port}/api/v1/sessions/exited-no-pr`);
+      const body = (await res.json()) as { session: SessionDetailResponse };
+      expect(body.session.status).toBe("done");
+    });
+
+    it("keeps working status when agent is still active", async () => {
+      const res = await fetch(`http://127.0.0.1:${port}/api/v1/sessions/still-working`);
+      const body = (await res.json()) as { session: SessionDetailResponse };
+      expect(body.session.status).toBe("working");
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Attention level
+  // -------------------------------------------------------------------------
+
+  describe("attention level", () => {
+    let server: Server;
+    let port: number;
+
+    const workingSession = makeSession({
+      id: "att-working",
+      status: "working",
+      activity: "active",
+    });
+
+    const mergedSession = makeSession({
+      id: "att-merged",
+      status: "merged",
+      activity: "exited",
+    });
+
+    const waitingInputSession = makeSession({
+      id: "att-waiting",
+      status: "working",
+      activity: "waiting_input",
+    });
+
+    const ciFailedSession = makeSession({
+      id: "att-ci-failed",
+      status: "ci_failed",
+      activity: "active",
+    });
+
+    const reviewPendingSession = makeSession({
+      id: "att-review-pending",
+      status: "review_pending",
+      activity: "active",
+    });
+
+    const approvedSession = makeSession({
+      id: "att-approved",
+      status: "approved",
+      activity: "exited",
+      pr: TEST_PR,
+    });
+
+    beforeAll(async () => {
+      const sessions = [
+        workingSession,
+        mergedSession,
+        waitingInputSession,
+        ciFailedSession,
+        reviewPendingSession,
+        approvedSession,
+      ];
+
+      const mockSessionManager: Partial<SessionManager> = {
+        get: vi.fn(async (id: string) => sessions.find((s) => s.id === id) ?? null),
+        list: vi.fn(async () => sessions),
+      };
+
+      const mockRegistry = {
+        get: vi.fn(() => null),
+        list: vi.fn(() => []),
+      } as unknown as PluginRegistry;
+
+      const services: Services = {
+        config: makeConfig(),
+        registry: mockRegistry,
+        sessionManager: mockSessionManager as SessionManager,
+      };
+
+      const app = express();
+      app.locals["services"] = services;
+      app.use(sessionsRouter);
+
+      const result = await startApp(app);
+      server = result.server;
+      port = result.port;
+    });
+
+    afterAll(async () => {
+      await stopServer(server);
+    });
+
+    it("returns 'working' for active sessions", async () => {
+      const res = await fetch(`http://127.0.0.1:${port}/api/v1/sessions/att-working`);
+      const body = (await res.json()) as { session: SessionDetailResponse };
+      expect(body.session.attentionLevel).toBe("working");
+    });
+
+    it("returns 'done' for merged sessions", async () => {
+      const res = await fetch(`http://127.0.0.1:${port}/api/v1/sessions/att-merged`);
+      const body = (await res.json()) as { session: SessionDetailResponse };
+      expect(body.session.attentionLevel).toBe("done");
+    });
+
+    it("returns 'respond' for waiting_input sessions", async () => {
+      const res = await fetch(`http://127.0.0.1:${port}/api/v1/sessions/att-waiting`);
+      const body = (await res.json()) as { session: SessionDetailResponse };
+      expect(body.session.attentionLevel).toBe("respond");
+    });
+
+    it("returns 'review' for ci_failed sessions", async () => {
+      const res = await fetch(`http://127.0.0.1:${port}/api/v1/sessions/att-ci-failed`);
+      const body = (await res.json()) as { session: SessionDetailResponse };
+      expect(body.session.attentionLevel).toBe("review");
+    });
+
+    it("returns 'pending' for review_pending sessions", async () => {
+      const res = await fetch(`http://127.0.0.1:${port}/api/v1/sessions/att-review-pending`);
+      const body = (await res.json()) as { session: SessionDetailResponse };
+      expect(body.session.attentionLevel).toBe("pending");
+    });
+
+    it("returns 'merge' for approved sessions with PR", async () => {
+      const res = await fetch(`http://127.0.0.1:${port}/api/v1/sessions/att-approved`);
+      const body = (await res.json()) as { session: SessionDetailResponse };
+      expect(body.session.attentionLevel).toBe("merge");
+    });
+
+    it("includes attentionLevel in list endpoint", async () => {
+      const res = await fetch(`http://127.0.0.1:${port}/api/v1/sessions`);
+      const body = (await res.json()) as { sessions: SessionResponse[] };
+      for (const session of body.sessions) {
+        expect(session).toHaveProperty("attentionLevel");
+        expect(["merge", "respond", "review", "pending", "working", "done"]).toContain(
+          session.attentionLevel,
+        );
+      }
     });
   });
 });

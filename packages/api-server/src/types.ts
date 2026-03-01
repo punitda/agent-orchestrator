@@ -13,6 +13,18 @@ import type {
   SessionStatus,
 } from "@composio/ao-core";
 
+/**
+ * Attention zone priority level, ordered by human action urgency:
+ *
+ * 1. merge   — PR approved + CI green. One click to clear.
+ * 2. respond — Agent waiting for human input. Quick unblock.
+ * 3. review  — CI failed, changes requested, conflicts. Needs investigation.
+ * 4. pending — Waiting on external (reviewer, CI). Nothing to do right now.
+ * 5. working — Agents doing their thing. Don't interrupt.
+ * 6. done    — Merged or terminated. Archive.
+ */
+export type AttentionLevel = "merge" | "respond" | "review" | "pending" | "working" | "done";
+
 /** Basic PR info included in session list responses (no CI/review enrichment). */
 export interface SessionPR {
   number: number;
@@ -30,6 +42,7 @@ export interface SessionResponse {
   id: string;
   projectId: string;
   status: SessionStatus;
+  attentionLevel: AttentionLevel;
   activity: ActivityState | null;
   branch: string | null;
   issueId: string | null;
