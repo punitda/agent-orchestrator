@@ -270,6 +270,80 @@ async function withTimeout<T>(
 const router: RouterType = Router();
 
 // ---------------------------------------------------------------------------
+// POST /api/v1/sessions — spawn a new session
+// ---------------------------------------------------------------------------
+
+router.post("/api/v1/sessions", async (req, res) => {
+  try {
+    const services = req.app.locals["services"] as Services | undefined;
+
+    if (!services) {
+      res.status(503).json({
+        error: "Service unavailable",
+        code: "SERVICE_UNAVAILABLE",
+      });
+      return;
+    }
+
+    const { config, sessionManager } = services;
+    const body = req.body as Record<string, unknown> | undefined;
+
+    // Validate required fields
+    const projectId =
+      typeof body?.["projectId"] === "string"
+        ? body["projectId"].trim()
+        : undefined;
+    const task =
+      typeof body?.["task"] === "string" ? body["task"].trim() : undefined;
+
+    if (!projectId) {
+      res.status(400).json({
+        error: "Missing required field: projectId",
+        code: "BAD_REQUEST",
+      });
+      return;
+    }
+
+    if (!task) {
+      res.status(400).json({
+        error: "Missing required field: task",
+        code: "BAD_REQUEST",
+      });
+      return;
+    }
+
+    // Validate project exists in config
+    if (!config.projects[projectId]) {
+      res.status(400).json({
+        error: `Unknown project: ${projectId}`,
+        code: "BAD_REQUEST",
+      });
+      return;
+    }
+
+    // Extract optional fields
+    const issueId =
+      typeof body?.["issueId"] === "string"
+        ? body["issueId"].trim() || undefined
+        : undefined;
+
+    const session = await sessionManager.spawn({
+      projectId,
+      prompt: task,
+      issueId,
+    });
+
+    res.status(201).json({ session: toSessionResponse(session) });
+  } catch (err: unknown) {
+    console.error("Failed to spawn session:", err);
+    res.status(500).json({
+      error: "Internal server error",
+      code: "INTERNAL_ERROR",
+    });
+  }
+});
+
+// ---------------------------------------------------------------------------
 // GET /api/v1/sessions — list all sessions
 // ---------------------------------------------------------------------------
 
