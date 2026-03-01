@@ -1,0 +1,2 @@
+{"type":"tool_use","tool_name":"Read","tool_input":{"file_path":"package.json"},"timestamp":"2025-01-15T10:01:00.000Z"}
+{"type":"tool_use","tool_name":"Bash","tool_input":{"command":"npm test -- --reporter=verbose --coverage"},"timestamp":"2025-01-15T10:01:01.000Z"}

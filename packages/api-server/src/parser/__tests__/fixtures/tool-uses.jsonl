@@ -1,0 +1,7 @@
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Read","id":"tool_1","input":{"file_path":"src/auth.ts"}}]},"timestamp":"2025-01-15T10:01:00.000Z"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Edit","id":"tool_2","input":{"file_path":"src/auth.ts","old_string":"if (skip) return;\nvalidate();\ncheck();","new_string":"validate();\ncheck();\nlog();\nnotify();\naudit();"}}]},"timestamp":"2025-01-15T10:01:01.000Z"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Write","id":"tool_3","input":{"file_path":"src/new-middleware.ts","content":"export function middleware() {}"}}]},"timestamp":"2025-01-15T10:01:02.000Z"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Bash","id":"tool_4","input":{"command":"npm test -- --reporter=verbose"}}]},"timestamp":"2025-01-15T10:01:03.000Z"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Glob","id":"tool_5","input":{"pattern":"src/**/*.test.ts"}}]},"timestamp":"2025-01-15T10:01:04.000Z"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Grep","id":"tool_6","input":{"pattern":"validateToken"}}]},"timestamp":"2025-01-15T10:01:05.000Z"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Agent","id":"tool_7","input":{"prompt":"find all auth files","subagent_type":"Explore"}}]},"timestamp":"2025-01-15T10:01:06.000Z"}

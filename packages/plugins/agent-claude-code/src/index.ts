@@ -203,7 +203,7 @@ export function toClaudeProjectPath(workspacePath: string): string {
 }
 
 /** Find the most recently modified .jsonl session file in a directory */
-async function findLatestSessionFile(projectDir: string): Promise<string | null> {
+export async function findLatestSessionFile(projectDir: string): Promise<string | null> {
   let entries: string[];
   try {
     entries = await readdir(projectDir);
