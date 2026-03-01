@@ -1063,6 +1063,41 @@ export function isIssueNotFoundError(err: unknown): boolean {
   );
 }
 
+// =============================================================================
+// PARSED MESSAGES (JSONL message feed)
+// =============================================================================
+
+/**
+ * Message types extracted from Claude Code JSONL session files.
+ * Used to build a mobile-friendly message feed from raw CLI output.
+ */
+export type MessageType =
+  | "text_response" // Text content Claude wrote
+  | "tool_summary" // Collapsed one-liner tool usage summary
+  | "permission_request" // Permission prompt awaiting approval
+  | "input_request" // Claude asking a question, waiting for user input
+  | "user_message"; // Messages sent via the API (created externally)
+
+/** A structured message parsed from a JSONL session file. */
+export interface ParsedMessage {
+  /** Message type */
+  type: MessageType;
+  /** Primary content (text, summary line, question, etc.) */
+  content: string;
+  /** Optional metadata specific to the message type */
+  metadata: Record<string, unknown>;
+  /** When this message occurred */
+  timestamp: string;
+}
+
+/** Result of parsing a JSONL file, including cursor for incremental reads. */
+export interface ParseResult {
+  /** Parsed messages */
+  messages: ParsedMessage[];
+  /** Number of bytes read (cursor for incremental reads) */
+  bytesRead: number;
+}
+
 /** Thrown when a session cannot be restored (e.g. merged, still working). */
 export class SessionNotRestorableError extends Error {
   constructor(
