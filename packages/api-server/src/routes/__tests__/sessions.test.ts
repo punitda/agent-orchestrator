@@ -143,6 +143,282 @@ async function request(port: number, query = "") {
 }
 
 // ===========================================================================
+// POST /api/v1/sessions — spawn a new session
+// ===========================================================================
+
+describe("POST /api/v1/sessions", () => {
+  describe("successful spawn", () => {
+    let server: Server;
+    let port: number;
+    const spawnedSession = makeSession({
+      id: "new-session-1",
+      projectId: "test-project",
+      status: "spawning" as Session["status"],
+      activity: "active",
+      branch: "feat/PUN-42",
+      issueId: "PUN-42",
+    });
+
+    const mockSpawn = vi.fn(async () => spawnedSession);
+
+    beforeAll(async () => {
+      const mockSessionManager: Partial<SessionManager> = {
+        spawn: mockSpawn,
+      };
+
+      const services: Services = {
+        config: makeConfig(),
+        registry: {} as unknown as PluginRegistry,
+        sessionManager: mockSessionManager as SessionManager,
+      };
+
+      const app = express();
+      app.use(express.json());
+      app.locals["services"] = services;
+      app.use(sessionsRouter);
+
+      const result = await startApp(app);
+      server = result.server;
+      port = result.port;
+    });
+
+    afterAll(async () => {
+      await stopServer(server);
+    });
+
+    it("returns 201 with session data on success", async () => {
+      const res = await fetch(`http://127.0.0.1:${port}/api/v1/sessions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId: "test-project", task: "Implement feature X" }),
+      });
+      expect(res.status).toBe(201);
+
+      const body = (await res.json()) as { session: SessionResponse };
+      expect(body.session).toBeDefined();
+      expect(body.session.id).toBe("new-session-1");
+      expect(body.session.projectId).toBe("test-project");
+      expect(body.session.branch).toBe("feat/PUN-42");
+      expect(body.session.issueId).toBe("PUN-42");
+    });
+
+    it("passes task as prompt to sessionManager.spawn()", async () => {
+      mockSpawn.mockClear();
+      await fetch(`http://127.0.0.1:${port}/api/v1/sessions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId: "test-project", task: "Fix the login bug" }),
+      });
+      expect(mockSpawn).toHaveBeenCalledWith({
+        projectId: "test-project",
+        prompt: "Fix the login bug",
+        issueId: undefined,
+      });
+    });
+
+    it("passes optional issueId to sessionManager.spawn()", async () => {
+      mockSpawn.mockClear();
+      await fetch(`http://127.0.0.1:${port}/api/v1/sessions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          projectId: "test-project",
+          task: "Fix bug",
+          issueId: "PUN-99",
+        }),
+      });
+      expect(mockSpawn).toHaveBeenCalledWith({
+        projectId: "test-project",
+        prompt: "Fix bug",
+        issueId: "PUN-99",
+      });
+    });
+
+    it("does not expose internal fields in response", async () => {
+      const res = await fetch(`http://127.0.0.1:${port}/api/v1/sessions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId: "test-project", task: "Do something" }),
+      });
+      const body = (await res.json()) as { session: Record<string, unknown> };
+      expect("runtimeHandle" in body.session).toBe(false);
+      expect("workspacePath" in body.session).toBe(false);
+      expect("metadata" in body.session).toBe(false);
+    });
+  });
+
+  describe("validation errors", () => {
+    let server: Server;
+    let port: number;
+
+    beforeAll(async () => {
+      const mockSessionManager: Partial<SessionManager> = {
+        spawn: vi.fn(),
+      };
+
+      const services: Services = {
+        config: makeConfig(),
+        registry: {} as unknown as PluginRegistry,
+        sessionManager: mockSessionManager as SessionManager,
+      };
+
+      const app = express();
+      app.use(express.json());
+      app.locals["services"] = services;
+      app.use(sessionsRouter);
+
+      const result = await startApp(app);
+      server = result.server;
+      port = result.port;
+    });
+
+    afterAll(async () => {
+      await stopServer(server);
+    });
+
+    it("returns 400 when projectId is missing", async () => {
+      const res = await fetch(`http://127.0.0.1:${port}/api/v1/sessions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ task: "Do something" }),
+      });
+      expect(res.status).toBe(400);
+
+      const body = (await res.json()) as { error: string; code: string };
+      expect(body.error).toBe("Missing required field: projectId");
+      expect(body.code).toBe("BAD_REQUEST");
+    });
+
+    it("returns 400 when task is missing", async () => {
+      const res = await fetch(`http://127.0.0.1:${port}/api/v1/sessions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId: "test-project" }),
+      });
+      expect(res.status).toBe(400);
+
+      const body = (await res.json()) as { error: string; code: string };
+      expect(body.error).toBe("Missing required field: task");
+      expect(body.code).toBe("BAD_REQUEST");
+    });
+
+    it("returns 400 when projectId is empty string", async () => {
+      const res = await fetch(`http://127.0.0.1:${port}/api/v1/sessions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId: "  ", task: "Do something" }),
+      });
+      expect(res.status).toBe(400);
+
+      const body = (await res.json()) as { error: string; code: string };
+      expect(body.error).toBe("Missing required field: projectId");
+      expect(body.code).toBe("BAD_REQUEST");
+    });
+
+    it("returns 400 when body is empty", async () => {
+      const res = await fetch(`http://127.0.0.1:${port}/api/v1/sessions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      expect(res.status).toBe(400);
+
+      const body = (await res.json()) as { error: string; code: string };
+      expect(body.code).toBe("BAD_REQUEST");
+    });
+
+    it("returns 400 for unknown project", async () => {
+      const res = await fetch(`http://127.0.0.1:${port}/api/v1/sessions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId: "nonexistent", task: "Do something" }),
+      });
+      expect(res.status).toBe(400);
+
+      const body = (await res.json()) as { error: string; code: string };
+      expect(body.error).toBe("Unknown project: nonexistent");
+      expect(body.code).toBe("BAD_REQUEST");
+    });
+  });
+
+  describe("spawn failure", () => {
+    let server: Server;
+    let port: number;
+
+    beforeAll(async () => {
+      const mockSessionManager: Partial<SessionManager> = {
+        spawn: vi.fn(async () => {
+          throw new Error("Workspace creation failed");
+        }),
+      };
+
+      const services: Services = {
+        config: makeConfig(),
+        registry: {} as unknown as PluginRegistry,
+        sessionManager: mockSessionManager as SessionManager,
+      };
+
+      const app = express();
+      app.use(express.json());
+      app.locals["services"] = services;
+      app.use(sessionsRouter);
+
+      const result = await startApp(app);
+      server = result.server;
+      port = result.port;
+    });
+
+    afterAll(async () => {
+      await stopServer(server);
+    });
+
+    it("returns 500 when spawn throws", async () => {
+      const res = await fetch(`http://127.0.0.1:${port}/api/v1/sessions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId: "test-project", task: "Do something" }),
+      });
+      expect(res.status).toBe(500);
+
+      const body = (await res.json()) as { error: string; code: string };
+      expect(body.error).toBe("Internal server error");
+      expect(body.code).toBe("INTERNAL_ERROR");
+    });
+  });
+
+  describe("when services are not ready", () => {
+    let server: Server;
+    let port: number;
+
+    beforeAll(async () => {
+      const app = express();
+      app.use(express.json());
+      app.use(sessionsRouter);
+
+      const result = await startApp(app);
+      server = result.server;
+      port = result.port;
+    });
+
+    afterAll(async () => {
+      await stopServer(server);
+    });
+
+    it("returns 503 SERVICE_UNAVAILABLE", async () => {
+      const res = await fetch(`http://127.0.0.1:${port}/api/v1/sessions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId: "test-project", task: "Do something" }),
+      });
+      expect(res.status).toBe(503);
+
+      const body = (await res.json()) as { error: string; code: string };
+      expect(body.code).toBe("SERVICE_UNAVAILABLE");
+    });
+  });
+});
+
+// ===========================================================================
 // GET /api/v1/sessions — list all sessions
 // ===========================================================================
 
