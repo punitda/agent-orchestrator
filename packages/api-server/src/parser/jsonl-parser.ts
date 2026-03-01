@@ -39,6 +39,8 @@ interface JsonlEntry {
   permission_prompt?: string;
   // Subtype for finer classification
   subtype?: string;
+  // System-generated meta entries (not real human input)
+  isMeta?: boolean;
 }
 
 // =============================================================================
@@ -326,12 +328,33 @@ async function parseJsonlMessagesAsync(filePath: string, fromByte: number): Prom
 
     // 5. User messages
     if (entry.type === "user" && entry.message?.role === "user") {
-      const text = extractAssistantText(entry.message.content);
+      // Skip system-generated meta entries (e.g. local-command-caveat)
+      if (entry.isMeta) continue;
+
+      const msgContent = entry.message.content;
+
+      // Skip tool_result arrays — these are internal plumbing, not human input
+      if (Array.isArray(msgContent)) {
+        const hasToolResult = msgContent.some(
+          (b) => typeof b === "object" && b !== null && b.type === "tool_result",
+        );
+        if (hasToolResult) continue;
+      }
+
+      const text = extractAssistantText(msgContent);
       if (text) {
+        // Filter out system-injected interrupt messages
+        if (text.startsWith("[Request interrupted")) continue;
+
+        // Check if images are attached
+        const hasImages =
+          Array.isArray(msgContent) &&
+          msgContent.some((b) => typeof b === "object" && b !== null && b.type === "image");
+
         messages.push({
           type: "user_message" as MessageType,
           content: text,
-          metadata: {},
+          metadata: hasImages ? { hasImages: true } : {},
           timestamp,
         });
       }
