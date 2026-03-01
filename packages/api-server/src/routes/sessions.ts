@@ -2,6 +2,7 @@ import { type Router as RouterType, Router } from "express";
 
 import type {
   Session,
+  SessionStatus,
   SCM,
   Agent,
   PRInfo,
@@ -10,6 +11,7 @@ import type {
 
 import type { Services } from "../services.js";
 import type {
+  SessionPR,
   SessionResponse,
   SessionDetailResponse,
   PRDetailResponse,
@@ -20,21 +22,62 @@ import type {
 const ENRICHMENT_TIMEOUT_MS = 3_000;
 
 // ---------------------------------------------------------------------------
+// Helpers — PR state derivation
+// ---------------------------------------------------------------------------
+
+/**
+ * Derive a best-effort PR state from the session status without making API calls.
+ * Used by the list endpoint to stay fast.
+ */
+function derivePRState(status: SessionStatus): SessionPR["state"] {
+  if (status === "merged") return "merged";
+  return "open";
+}
+
+/**
+ * Reconcile a stale session status using live PR data.
+ * The flat-file metadata is only written when the agent is running;
+ * once the agent exits, the status never updates. This function
+ * corrects the response status using enriched data from the SCM plugin.
+ */
+function reconcileSessionStatus(
+  metadataStatus: SessionStatus,
+  prState: SessionPR["state"] | undefined,
+  activity: string | null,
+): SessionStatus {
+  // PR merged but metadata still says pr_open/approved/mergeable/etc.
+  if (prState === "merged" && metadataStatus !== "merged") {
+    return "merged";
+  }
+  // PR closed (not merged) and agent exited — session is done
+  if (prState === "closed" && activity === "exited") {
+    return "done";
+  }
+  // Agent exited without a PR — session is done
+  if (!prState && activity === "exited" && metadataStatus === "working") {
+    return "done";
+  }
+  return metadataStatus;
+}
+
+// ---------------------------------------------------------------------------
 // Helpers — list endpoint
 // ---------------------------------------------------------------------------
 
 function toSessionResponse(session: Session): SessionResponse {
+  const prState = session.pr ? derivePRState(session.status) : undefined;
+  const status = reconcileSessionStatus(session.status, prState, session.activity);
   return {
     id: session.id,
     projectId: session.projectId,
-    status: session.status,
+    status,
     activity: session.activity,
     branch: session.branch,
     issueId: session.issueId,
     createdAt: session.createdAt.toISOString(),
     lastActivityAt: session.lastActivityAt.toISOString(),
     pr: session.pr
-      ? { number: session.pr.number, url: session.pr.url, state: "open" }
+      ? { number: session.pr.number, url: session.pr.url, state: prState ?? "open" }
       : null,
     agentInfo: session.agentInfo?.summary
       ? { summary: session.agentInfo.summary }
@@ -78,7 +121,7 @@ function toSessionDetailResponse(session: Session): SessionDetailResponse {
       ? {
           number: session.pr.number,
           url: session.pr.url,
-          state: "open",
+          state: derivePRState(session.status),
           ciStatus: "none",
           reviewDecision: "none",
           mergeable: false,
@@ -91,18 +134,20 @@ function toSessionDetailResponse(session: Session): SessionDetailResponse {
   };
 }
 
-/** Enrich PR with CI status, review decision, and mergeability from SCM plugin. */
+/** Enrich PR with live state, CI status, review decision, and mergeability from SCM plugin. */
 async function enrichPR(
   scm: SCM,
   pr: PRInfo,
-): Promise<Pick<PRDetailResponse, "ciStatus" | "reviewDecision" | "mergeable">> {
-  const [ciResult, reviewResult, mergeResult] = await Promise.allSettled([
+): Promise<Pick<PRDetailResponse, "state" | "ciStatus" | "reviewDecision" | "mergeable">> {
+  const [stateResult, ciResult, reviewResult, mergeResult] = await Promise.allSettled([
+    scm.getPRState(pr),
     scm.getCISummary(pr),
     scm.getReviewDecision(pr),
     scm.getMergeability(pr),
   ]);
 
   return {
+    state: stateResult.status === "fulfilled" ? stateResult.value : "open",
     ciStatus: ciResult.status === "fulfilled" ? ciResult.value : "none",
     reviewDecision:
       reviewResult.status === "fulfilled" ? reviewResult.value : "none",
@@ -234,6 +279,7 @@ router.get("/api/v1/sessions/:id", async (req, res) => {
         enrichmentPromises.push(
           enrichPR(scm, session.pr).then((prData) => {
             if (response.pr) {
+              response.pr.state = prData.state;
               response.pr.ciStatus = prData.ciStatus;
               response.pr.reviewDecision = prData.reviewDecision;
               response.pr.mergeable = prData.mergeable;
@@ -260,6 +306,13 @@ router.get("/api/v1/sessions/:id", async (req, res) => {
     if (enrichmentPromises.length > 0) {
       await withTimeout(Promise.allSettled(enrichmentPromises), ENRICHMENT_TIMEOUT_MS);
     }
+
+    // Reconcile stale session status using live enriched data
+    response.status = reconcileSessionStatus(
+      response.status,
+      response.pr?.state,
+      response.activity,
+    );
 
     res.json({ session: response });
   } catch (err: unknown) {
