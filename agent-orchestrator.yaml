@@ -10,17 +10,17 @@ defaults:
   notifiers: [desktop]
 
 projects:
-  ao:
-    name: Agent Orchestrator
-    repo: ComposioHQ/agent-orchestrator
-    path: ~/agent-orchestrator
+  commander:
+    name: ClaudeCommander
+    repo: punitda/agent-orchestrator
+    path: ~/Personal/AI/Agents/agent-orchestrator
     defaultBranch: main
-    sessionPrefix: ao
+    sessionPrefix: cmd
     scm:
       plugin: github
     tracker:
       plugin: linear
-      teamId: "2a6e9b1b-19cd-4e30-b5bd-7b34dc491c7e"
+      teamId: "25a08f7e-43ba-4c21-9a5b-64158ff92718"
     symlinks: [.claude]
     postCreate:
       - "pnpm install"

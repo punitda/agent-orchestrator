@@ -11,8 +11,12 @@
  * Reference: scripts/claude-ao-session, scripts/send-to-session
  */
 
+import { execFile } from "node:child_process";
 import { statSync, existsSync, readdirSync, writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
+import { promisify } from "node:util";
+
+const execFileAsync = promisify(execFile);
 import {
   isIssueNotFoundError,
   isRestorable,
@@ -1041,6 +1045,20 @@ export function createSessionManager(deps: SessionManagerDeps): SessionManager {
       } catch {
         // Best effort — may already be gone
       }
+    }
+
+    // 6.5. Pre-accept workspace trust dialog for the worktree.
+    // Claude Code shows an interactive "trust this folder" prompt for new workspaces.
+    // Running `claude config set` from within the workspace writes to the project-scoped
+    // config, so the prompt is skipped when the agent starts.
+    try {
+      await execFileAsync("claude", ["config", "set", "hasTrustDialogAccepted", "true"], {
+        cwd: workspacePath,
+        timeout: 10_000,
+      });
+    } catch {
+      // Best effort — if `claude` CLI isn't on PATH or fails, the trust prompt
+      // will still appear but won't crash restore.
     }
 
     // 7. Get launch command — try restore command first, fall back to fresh launch
