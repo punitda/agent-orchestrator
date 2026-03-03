@@ -15,10 +15,13 @@ import {
   type SessionManager,
 } from "@composio/ao-core";
 
+import { createDatabase, type CommanderDatabase } from "./database.js";
+
 export interface Services {
   config: OrchestratorConfig;
   registry: PluginRegistry;
   sessionManager: SessionManager;
+  database: CommanderDatabase;
 }
 
 let servicesPromise: Promise<Services> | null = null;
@@ -71,6 +74,7 @@ async function initServices(): Promise<Services> {
   }
 
   const sessionManager = createSessionManager({ config, registry });
+  const database = createDatabase();
 
-  return { config, registry, sessionManager };
+  return { config, registry, sessionManager, database };
 }
