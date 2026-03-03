@@ -17,6 +17,7 @@ import type {
 import express from "express";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
+import type { CommanderDatabase } from "../../database.js";
 import type { Services } from "../../services.js";
 import type { SessionResponse, SessionDetailResponse } from "../../types.js";
 import { sessionsRouter } from "../sessions.js";
@@ -170,6 +171,7 @@ describe("POST /api/v1/sessions", () => {
         config: makeConfig(),
         registry: {} as unknown as PluginRegistry,
         sessionManager: mockSessionManager as SessionManager,
+        database: {} as unknown as CommanderDatabase,
       };
 
       const app = express();
@@ -260,6 +262,7 @@ describe("POST /api/v1/sessions", () => {
         config: makeConfig(),
         registry: {} as unknown as PluginRegistry,
         sessionManager: mockSessionManager as SessionManager,
+        database: {} as unknown as CommanderDatabase,
       };
 
       const app = express();
@@ -356,6 +359,7 @@ describe("POST /api/v1/sessions", () => {
         config: makeConfig(),
         registry: {} as unknown as PluginRegistry,
         sessionManager: mockSessionManager as SessionManager,
+        database: {} as unknown as CommanderDatabase,
       };
 
       const app = express();
@@ -685,6 +689,7 @@ describe("GET /api/v1/sessions/:id", () => {
         config: makeConfig(),
         registry: mockRegistry,
         sessionManager: mockSessionManager as SessionManager,
+        database: {} as unknown as CommanderDatabase,
       };
 
       const app = express();
@@ -837,6 +842,7 @@ describe("GET /api/v1/sessions/:id", () => {
         config: makeConfig(),
         registry: mockRegistry,
         sessionManager: mockSessionManager as SessionManager,
+        database: {} as unknown as CommanderDatabase,
       };
 
       const app = express();
@@ -959,6 +965,7 @@ describe("GET /api/v1/sessions/:id", () => {
         config: makeConfig(),
         registry: mockRegistry,
         sessionManager: mockSessionManager as SessionManager,
+        database: {} as unknown as CommanderDatabase,
       };
 
       const app = express();
@@ -1056,6 +1063,7 @@ describe("GET /api/v1/sessions/:id", () => {
         config: makeConfig(),
         registry: mockRegistry,
         sessionManager: mockSessionManager as SessionManager,
+        database: {} as unknown as CommanderDatabase,
       };
 
       const app = express();
@@ -1121,6 +1129,7 @@ describe("GET /api/v1/sessions/:id", () => {
         config: makeConfig(),
         registry: mockRegistry,
         sessionManager: mockSessionManager as SessionManager,
+        database: {} as unknown as CommanderDatabase,
       };
 
       const app = express();
@@ -1224,6 +1233,7 @@ describe("GET /api/v1/sessions/:id", () => {
         config: makeConfig(),
         registry: mockRegistry,
         sessionManager: mockSessionManager as SessionManager,
+        database: {} as unknown as CommanderDatabase,
       };
 
       const app = express();
@@ -1328,6 +1338,7 @@ describe("GET /api/v1/sessions/:id", () => {
         config: makeConfig(),
         registry: mockRegistry,
         sessionManager: mockSessionManager as SessionManager,
+        database: {} as unknown as CommanderDatabase,
       };
 
       const app = express();
