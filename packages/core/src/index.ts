@@ -62,6 +62,14 @@ export type { OrchestratorPromptConfig } from "./orchestrator-prompt.js";
 // Shared utilities
 export { shellEscape, escapeAppleScript, validateUrl, readLastJsonlEntry } from "./utils.js";
 
+// Permission settings generator
+export {
+  generateSettingsJson,
+  resolveTemplate,
+  mergeTemplates,
+  DEFAULT_PERMISSION_TEMPLATE,
+} from "./permissions/settings-generator.js";
+
 // Path utilities — hash-based directory structure
 export {
   generateConfigHash,

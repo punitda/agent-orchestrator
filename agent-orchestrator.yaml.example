@@ -48,6 +48,13 @@ projects:
     #   permissions: skip    # --dangerously-skip-permissions
     #   model: opus
 
+    # Per-project permission template (extends global permissionTemplate)
+    # permissionTemplate:
+    #   allowedTools:
+    #     - "Bash(pnpm build*)"
+    #   deniedTools:
+    #     - "Bash(docker*)"
+
     # Inline rules included in every agent prompt for this project
     # agentRules: |
     #   Always run tests before pushing.
@@ -78,6 +85,26 @@ projects:
 #   action: [desktop, slack]   # PR ready to merge
 #   warning: [slack]           # auto-fix failed
 #   info: [slack]              # summary, all done
+
+# Global permission template for spawned sessions
+# Pre-approves safe operations and denies dangerous ones.
+# Per-project overrides extend (not replace) this template.
+# If omitted, a hardcoded sensible default is used.
+# permissionTemplate:
+#   allowedTools:
+#     - Read
+#     - Glob
+#     - Grep
+#     - Edit
+#     - Write
+#     - "Bash(git status*)"
+#     - "Bash(npm test*)"
+#     - "Bash(npm run lint*)"
+#   deniedTools:
+#     - "Bash(rm -rf*)"
+#     - "Bash(sudo *)"
+#     - "Bash(git push*)"
+#     - "Bash(curl *)"
 
 # Reactions — auto-responses to events (these are the defaults)
 # reactions:

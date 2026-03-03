@@ -51,6 +51,11 @@ const NotifierConfigSchema = z
   })
   .passthrough();
 
+const PermissionTemplateSchema = z.object({
+  allowedTools: z.array(z.string()).default([]),
+  deniedTools: z.array(z.string()).default([]),
+});
+
 const AgentSpecificConfigSchema = z
   .object({
     permissions: z.enum(["skip", "default"]).optional(),
@@ -75,6 +80,7 @@ const ProjectConfigSchema = z.object({
   symlinks: z.array(z.string()).optional(),
   postCreate: z.array(z.string()).optional(),
   agentConfig: AgentSpecificConfigSchema.optional(),
+  permissionTemplate: PermissionTemplateSchema.optional(),
   reactions: z.record(ReactionConfigSchema.partial()).optional(),
   agentRules: z.string().optional(),
   agentRulesFile: z.string().optional(),
@@ -103,6 +109,7 @@ const OrchestratorConfigSchema = z.object({
     info: ["composio"],
   }),
   reactions: z.record(ReactionConfigSchema).default({}),
+  permissionTemplate: PermissionTemplateSchema.optional(),
 });
 
 // =============================================================================

@@ -52,6 +52,7 @@ import {
   reserveSessionId,
 } from "./metadata.js";
 import { buildPrompt } from "./prompt-builder.js";
+import { generateSettingsJson, resolveTemplate } from "./permissions/settings-generator.js";
 import {
   getSessionsDir,
   getProjectBaseDir,
@@ -439,6 +440,19 @@ export function createSessionManager(deps: SessionManagerDeps): SessionManager {
         }
         throw err;
       }
+    }
+
+    // Generate permission settings.json in the workspace
+    // Must happen before agent launch so permissions are in place when the
+    // agent runs its first tool. Does not overwrite existing settings.json.
+    try {
+      const permTemplate = resolveTemplate(
+        config.permissionTemplate,
+        project.permissionTemplate,
+      );
+      generateSettingsJson(workspacePath, permTemplate);
+    } catch {
+      // Non-fatal: agent will still work, just without pre-approved permissions
     }
 
     // Generate prompt with validated issue
