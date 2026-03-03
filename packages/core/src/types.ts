@@ -825,6 +825,9 @@ export interface OrchestratorConfig {
 
   /** Default reaction configs */
   reactions: Record<string, ReactionConfig>;
+
+  /** Global permission template for spawned sessions */
+  permissionTemplate?: PermissionTemplate;
 }
 
 export interface DefaultPlugins {
@@ -877,6 +880,9 @@ export interface ProjectConfig {
   /** Per-project reaction overrides */
   reactions?: Record<string, Partial<ReactionConfig>>;
 
+  /** Per-project permission template override (extends global template) */
+  permissionTemplate?: PermissionTemplate;
+
   /** Inline rules/instructions passed to every agent prompt */
   agentRules?: string;
 
@@ -907,6 +913,18 @@ export interface AgentSpecificConfig {
   permissions?: "skip" | "default";
   model?: string;
   [key: string]: unknown;
+}
+
+/**
+ * Permission template for Claude Code settings.json.
+ * Controls which tool operations are pre-approved or denied
+ * when spawning sessions remotely via the API.
+ */
+export interface PermissionTemplate {
+  /** Tool patterns to pre-approve (e.g. "Read", "Bash(git status*)") */
+  allowedTools: string[];
+  /** Tool patterns to deny (e.g. "Bash(rm -rf*)", "Bash(sudo*)") */
+  deniedTools: string[];
 }
 
 // =============================================================================
