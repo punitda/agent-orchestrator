@@ -18,25 +18,25 @@ afterEach(() => {
 describe("loadServerConfig", () => {
   it("returns defaults when config file does not exist", () => {
     const config = loadServerConfig(join(TEST_DIR, "nonexistent.json"));
-    expect(config).toEqual({ host: "127.0.0.1", port: 3001 });
+    expect(config).toEqual({ host: "127.0.0.1", port: 3001, parseIntervalMs: 10_000 });
   });
 
   it("loads valid config with Tailscale IP", () => {
     writeFileSync(TEST_CONFIG, JSON.stringify({ host: "100.64.0.1", port: 3001 }));
     const config = loadServerConfig(TEST_CONFIG);
-    expect(config).toEqual({ host: "100.64.0.1", port: 3001 });
+    expect(config).toEqual({ host: "100.64.0.1", port: 3001, parseIntervalMs: 10_000 });
   });
 
   it("loads valid config with localhost", () => {
     writeFileSync(TEST_CONFIG, JSON.stringify({ host: "127.0.0.1", port: 8080 }));
     const config = loadServerConfig(TEST_CONFIG);
-    expect(config).toEqual({ host: "127.0.0.1", port: 8080 });
+    expect(config).toEqual({ host: "127.0.0.1", port: 8080, parseIntervalMs: 10_000 });
   });
 
   it("loads valid config with hostname", () => {
     writeFileSync(TEST_CONFIG, JSON.stringify({ host: "my-server.tailnet", port: 3001 }));
     const config = loadServerConfig(TEST_CONFIG);
-    expect(config).toEqual({ host: "my-server.tailnet", port: 3001 });
+    expect(config).toEqual({ host: "my-server.tailnet", port: 3001, parseIntervalMs: 10_000 });
   });
 
   it("rejects 0.0.0.0 with security error", () => {

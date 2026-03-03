@@ -40,6 +40,7 @@ export const ServerConfigSchema = z
   .object({
     host: z.string().min(1, "host must not be empty"),
     port: z.number().int().min(1).max(65535),
+    parseIntervalMs: z.number().int().min(1000).default(10_000),
   })
   .refine((cfg) => cfg.host !== "0.0.0.0", {
     message:
@@ -53,7 +54,7 @@ export const ServerConfigSchema = z
 
 export type ServerConfig = z.infer<typeof ServerConfigSchema>;
 
-const DEFAULT_CONFIG: ServerConfig = { host: "127.0.0.1", port: 3001 };
+const DEFAULT_CONFIG: ServerConfig = { host: "127.0.0.1", port: 3001, parseIntervalMs: 10_000 };
 
 export const CONFIG_DIR = join(homedir(), ".claude-commander");
 export const CONFIG_PATH = join(CONFIG_DIR, "config.json");
